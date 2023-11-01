@@ -23,7 +23,9 @@ def test_parse_invalid_grammar(x: str) -> None:
 
 def test_parse_comparison() -> None:
     comp = 'gte("foo", 2)'
-    expected = Comparison(comparator=Comparator.GTE, attribute="foo", value=2)
+    expected = Comparison(
+        comparator=Comparator.GTE, attribute="foo", value=2, value_type="int"
+    )
     for input in (
         comp,
         comp.replace('"', "'"),
@@ -31,16 +33,26 @@ def test_parse_comparison() -> None:
         comp.replace(" ", "  "),
         comp.replace("(", " ("),
         comp.replace(",", ", "),
-        comp.replace("2", "2.0"),
     ):
         actual = DEFAULT_PARSER.parse(input)
         assert expected == actual
 
+    comp = 'gte("foo", 2.0)'
+    expected = Comparison(
+        comparator=Comparator.GTE, attribute="foo", value=2.0, value_type="float"
+    )
+    actual = DEFAULT_PARSER.parse(comp)
+    assert expected == actual
+
 
 def test_parse_operation() -> None:
     op = 'and(eq("foo", "bar"), lt("baz", 1995.25))'
-    eq = Comparison(comparator=Comparator.EQ, attribute="foo", value="bar")
-    lt = Comparison(comparator=Comparator.LT, attribute="baz", value=1995.25)
+    eq = Comparison(
+        comparator=Comparator.EQ, attribute="foo", value="bar", value_type="str"
+    )
+    lt = Comparison(
+        comparator=Comparator.LT, attribute="baz", value=1995.25, value_type="float"
+    )
     expected = Operation(operator=Operator.AND, arguments=[eq, lt])
     for input in (
         op,
@@ -57,10 +69,18 @@ def test_parse_operation() -> None:
 
 def test_parse_nested_operation() -> None:
     op = 'and(or(eq("a", "b"), eq("a", "c"), eq("a", "d")), not(eq("z", "foo")))'
-    eq1 = Comparison(comparator=Comparator.EQ, attribute="a", value="b")
-    eq2 = Comparison(comparator=Comparator.EQ, attribute="a", value="c")
-    eq3 = Comparison(comparator=Comparator.EQ, attribute="a", value="d")
-    eq4 = Comparison(comparator=Comparator.EQ, attribute="z", value="foo")
+    eq1 = Comparison(
+        comparator=Comparator.EQ, attribute="a", value="b", value_type="str"
+    )
+    eq2 = Comparison(
+        comparator=Comparator.EQ, attribute="a", value="c", value_type="str"
+    )
+    eq3 = Comparison(
+        comparator=Comparator.EQ, attribute="a", value="d", value_type="str"
+    )
+    eq4 = Comparison(
+        comparator=Comparator.EQ, attribute="z", value="foo", value_type="str"
+    )
     _not = Operation(operator=Operator.NOT, arguments=[eq4])
     _or = Operation(operator=Operator.OR, arguments=[eq1, eq2, eq3])
     expected = Operation(operator=Operator.AND, arguments=[_or, _not])
@@ -114,6 +134,13 @@ def test_parse_bool_value(x: str) -> None:
     actual = parsed.value
     expected = x.lower() == "true"
     assert actual == expected
+
+
+@pytest.mark.parametrize("x", ('"2022-10-20"', "'2022-10-20'", "2022-10-20"))
+def test_parse_date_value(x: str) -> None:
+    parsed = cast(Comparison, DEFAULT_PARSER.parse(f'eq("x", {x})'))
+    actual = parsed.value
+    assert actual == x.strip("'\"")
 
 
 @pytest.mark.parametrize("op", ("and", "or"))

@@ -102,6 +102,7 @@ class Comparison(FilterDirective):
     comparator: Comparator
     attribute: str
     value: Any
+    value_type: str
 
 
 class Operation(FilterDirective):

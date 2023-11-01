@@ -1,5 +1,5 @@
 import datetime
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Optional, Sequence, Tuple, Union
 
 from langchain.utils import check_package_version
 
@@ -32,14 +32,14 @@ GRAMMAR = r"""
 
     ?value: SIGNED_INT -> int
         | SIGNED_FLOAT -> float
-        | TIMESTAMP -> timestamp
+        | DATE -> date
         | list
         | string
         | ("false" | "False" | "FALSE") -> false
         | ("true" | "True" | "TRUE") -> true
 
     args: expr ("," expr)*
-    TIMESTAMP.2: /["'](\d{4}-[01]\d-[0-3]\d)["']/
+    DATE.2: /["']?(\d{4}-[01]\d-[0-3]\d)["']?/
     string: /'[^']*'/ | ESCAPED_STRING
     list: "[" [args] "]"
 
@@ -75,12 +75,17 @@ class QueryTransformer(Transformer):
     def func_call(self, func_name: Any, args: list) -> FilterDirective:
         func = self._match_func_name(str(func_name))
         if isinstance(func, Comparator):
-            if self.allowed_attributes and args[0] not in self.allowed_attributes:
+            if self.allowed_attributes and args[0][0] not in self.allowed_attributes:
                 raise ValueError(
-                    f"Received invalid attributes {args[0]}. Allowed attributes are "
+                    f"Received invalid attributes {args[0][0]}. Allowed attributes are "
                     f"{self.allowed_attributes}"
                 )
-            return Comparison(comparator=func, attribute=args[0], value=args[1])
+            return Comparison(
+                comparator=func,
+                attribute=args[0][0],
+                value=args[1][0],
+                value_type=args[1][1],
+            )
         elif len(args) == 1 and func in (Operator.AND, Operator.OR):
             return args[0]
         else:
@@ -112,30 +117,37 @@ class QueryTransformer(Transformer):
     def args(self, *items: Any) -> tuple:
         return items
 
-    def false(self) -> bool:
-        return False
+    def false(self) -> Tuple[bool, str]:
+        return False, "bool"
 
-    def true(self) -> bool:
-        return True
+    def true(self) -> Tuple[bool, str]:
+        return True, "bool"
 
-    def list(self, item: Any) -> list:
-        if item is None:
-            return []
-        return list(item)
+    def list(self, item: Any) -> Tuple[list, str]:
+        if not item:
+            return [], "List[]"
+        return list(el for el, _ in item), f"List[{item[0][1]}]"
 
-    def int(self, item: Any) -> int:
-        return int(item)
+    def int(self, item: Any) -> Tuple[int, str]:
+        return int(item), "int"
 
-    def float(self, item: Any) -> float:
-        return float(item)
+    def float(self, item: Any) -> Tuple[float, str]:
+        return float(item), "float"
 
-    def timestamp(self, item: Any) -> datetime.date:
-        item = item.replace("'", '"')
-        return datetime.datetime.strptime(item, '"%Y-%m-%d"').date()
+    def date(self, item: Any) -> Tuple[str, str]:
+        item = str(item).strip("\"'")
+        try:
+            datetime.datetime.strptime(item, "%Y-%m-%d")
+        except ValueError as e:
+            raise ValueError(
+                "Dates are expected to be provided in ISO 8601 date format "
+                "(YYYY-MM-DD)."
+            ) from e
+        return item, "date"
 
-    def string(self, item: Any) -> str:
+    def string(self, item: Any) -> Tuple[str, str]:
         # Remove escaped quotes
-        return str(item).strip("\"'")
+        return str(item).strip("\"'"), "str"
 
 
 def get_parser(
