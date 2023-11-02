@@ -59,7 +59,7 @@ class RunState(TypedDict):
     """List of output chunks streamed by Runnable.stream()"""
     final_output: Optional[Any]
     """Final output of the run, usually the result of aggregating (`+`) streamed_output.
-    Only available after the run has finished successfully."""
+    Updated throughout the run when supported by the Runnable."""
 
     logs: Dict[str, LogEntry]
     """Map of run names to sub-runs. If filters were supplied, this list will
