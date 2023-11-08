@@ -262,8 +262,8 @@ class BaseOpenAI(BaseLLM):
         )
         try:
             import openai
-
-            values["client"] = openai.Completion
+            client = OpenAI()
+            values["client"] = client.completions
         except ImportError:
             raise ImportError(
                 "Could not import openai python package. "
